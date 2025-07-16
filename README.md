@@ -19,6 +19,7 @@ A sophisticated personal knowledge management system that intelligently scrapes,
 - ✅ **Vector Search**: Semantic search across knowledge base
 - ✅ **Chat Management**: Create, view, and delete chat sessions
 - ✅ **Web Scraping**: Intelligent content extraction from web sources
+- ✅ **Document Upload**: Upload and process PDF, TXT, and EPUB files
 
 ## ⚡ Quick Start
 
@@ -229,6 +230,7 @@ ollama serve
 
 ### Knowledge Base Endpoints
 - `POST /api/v1/scrape` - Scrape web content and add to knowledge base
+- `POST /api/v1/upload` - Upload documents (PDF, TXT, EPUB) to knowledge base
 - `GET /api/v1/sources` - Get knowledge sources
 - `POST /api/v1/query` - Query knowledge base directly
 
@@ -273,12 +275,30 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 3. Click "New Chat" to start your first conversation
 
 ### 2. Adding Knowledge Sources
+
+#### Web Scraping
 ```bash
 # Using curl to add a web source
 curl -X POST "http://localhost:8000/api/v1/scrape" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/article"}'
 ```
+
+#### Document Upload
+```bash
+# Upload a document via curl
+curl -X POST "http://localhost:8000/api/v1/upload" \
+  -F "file=@/path/to/your/document.txt"
+
+# Supported formats: PDF, TXT, EPUB
+# Maximum file size: 10MB
+```
+
+#### Using the Web Interface
+1. Navigate to http://localhost:3000
+2. Use the "Upload Documents" section to select and upload files
+3. Drag and drop files or click "Choose File" to browse
+4. Supported formats: PDF, TXT, EPUB files
 
 ### 3. Chatting with Your Knowledge Base
 1. Type your question in the chat interface

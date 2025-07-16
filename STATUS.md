@@ -14,11 +14,13 @@
 - ✅ Pydantic schemas (chat.py)
 - ✅ Services implemented:
   - ✅ Web scraper (scraper.py)
+  - ✅ Document processor (document_processor.py)
   - ✅ Vector store (vector_store.py)
   - ✅ LLM integration (llm.py)
 - ✅ API endpoints:
   - ✅ Chat endpoints (chat.py)
   - ✅ Scraping endpoints (scrape.py)
+  - ✅ Document upload endpoints (upload.py)
   - ✅ Sources endpoints (sources.py)
   - ✅ Query endpoints (query.py)
 - ✅ Main FastAPI application (main.py)
@@ -35,6 +37,8 @@
   - ✅ Button component (ui/button.tsx)
   - ✅ Chat sidebar (chat/ChatSidebar.tsx)
   - ✅ Chat interface (chat/ChatInterface.tsx)
+  - ✅ Document upload component (documents/DocumentUpload.tsx)
+  - ✅ Web scraping form (scraping/ScrapeForm.tsx)
 - ✅ Main page component (app/page.tsx)
 - ✅ Global CSS with design system
 - ✅ Environment configuration (.env.local)
@@ -98,7 +102,8 @@ npm run dev
 1. **Install remaining dependencies**
 2. **Test API endpoints** at http://localhost:8000/docs
 3. **Verify frontend** at http://localhost:3000
-4. **Add first knowledge source** via scraping API
-5. **Test chat functionality** with knowledge base queries
+4. **Add first knowledge source** via scraping API or document upload
+5. **Test document upload** with PDF, TXT, or EPUB files
+6. **Test chat functionality** with knowledge base queries
 
 The core architecture is complete and ready for testing!
