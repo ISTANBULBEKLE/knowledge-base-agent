@@ -6,7 +6,7 @@ from app.core.config import settings
 
 # Async engine for database operations
 async_engine = create_async_engine(
-    settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+    settings.DATABASE_URL,
     echo=settings.DEBUG
 )
 

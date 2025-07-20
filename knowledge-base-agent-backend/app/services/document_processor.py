@@ -75,6 +75,10 @@ class DocumentProcessor:
     async def _process_text(self, file_content: bytes, filename: str) -> str:
         """Process plain text files"""
         try:
+            # Handle empty files
+            if not file_content:
+                return f"Empty text file: {filename}"
+            
             # Try UTF-8 first, then fall back to other encodings
             encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
             
@@ -84,32 +88,106 @@ class DocumentProcessor:
                     # Basic text cleaning
                     text = text.strip()
                     if text:
-                        return text
+                        return self._clean_text(text)
+                    else:
+                        # File decoded but is empty/whitespace only
+                        return f"Text file: {filename}\n\nNote: This file appears to be empty or contains only whitespace."
                 except UnicodeDecodeError:
                     continue
             
-            raise ValueError("Could not decode text file with supported encodings")
+            # If we get here, no encoding worked
+            return f"Text file: {filename}\n\nNote: Could not decode this text file with supported encodings (UTF-8, Latin-1, CP1252, ISO-8859-1)."
             
         except Exception as e:
-            raise ValueError(f"Error processing text file: {str(e)}")
+            return f"Text file: {filename}\n\nError processing text file: {str(e)}"
     
     async def _process_pdf(self, file_content: bytes, filename: str) -> str:
-        """Process PDF files - Basic implementation without external dependencies"""
-        # For now, return a placeholder implementation
-        # In production, you would use PyPDF2, pdfplumber, or similar
-        raise NotImplementedError(
-            "PDF processing requires additional dependencies. "
-            "Please install PyPDF2 or pdfplumber to enable PDF support."
-        )
+        """Process PDF files - Basic implementation with fallback"""
+        try:
+            # Try to import PyPDF2 if available
+            import PyPDF2
+            import io
+            
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+            text_content = []
+            
+            for page in pdf_reader.pages:
+                text_content.append(page.extract_text())
+            
+            extracted_text = "\n".join(text_content)
+            return self._clean_text(extracted_text)
+            
+        except ImportError:
+            # Fallback: extract any readable text from PDF bytes
+            try:
+                # Simple text extraction - look for readable content
+                decoded_content = file_content.decode('latin-1', errors='ignore')
+                # Basic text extraction from PDF structure
+                import re
+                text_patterns = re.findall(r'\(([^)]+)\)', decoded_content)
+                text_content = ' '.join(text_patterns)
+                
+                if len(text_content.strip()) < 50:
+                    # If we can't extract much, provide a placeholder
+                    return f"PDF document: {filename}\n\nNote: PDF text extraction requires PyPDF2. Install with: pip install PyPDF2"
+                
+                return self._clean_text(text_content)
+            except Exception:
+                return f"PDF document: {filename}\n\nNote: Unable to extract text from this PDF. Please install PyPDF2 for better PDF support."
+        except Exception as e:
+            return f"PDF document: {filename}\n\nError processing PDF: {str(e)}"
     
     async def _process_epub(self, file_content: bytes, filename: str) -> str:
-        """Process EPUB files - Basic implementation without external dependencies"""
-        # For now, return a placeholder implementation
-        # In production, you would use ebooklib or similar
-        raise NotImplementedError(
-            "EPUB processing requires additional dependencies. "
-            "Please install ebooklib to enable EPUB support."
-        )
+        """Process EPUB files - Basic implementation with fallback"""
+        try:
+            # Try to import ebooklib if available
+            import ebooklib
+            from ebooklib import epub
+            import io
+            
+            book = epub.read_epub(io.BytesIO(file_content))
+            text_content = []
+            
+            for item in book.get_items():
+                if item.get_type() == ebooklib.ITEM_DOCUMENT:
+                    # Extract text from HTML content
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(item.get_content(), 'html.parser')
+                    text_content.append(soup.get_text())
+            
+            extracted_text = "\n".join(text_content)
+            return self._clean_text(extracted_text)
+            
+        except ImportError:
+            # Fallback for EPUB - it's a ZIP file, try to extract text
+            try:
+                import zipfile
+                import io
+                
+                with zipfile.ZipFile(io.BytesIO(file_content)) as epub_zip:
+                    text_content = []
+                    for file_name in epub_zip.namelist():
+                        if file_name.endswith('.html') or file_name.endswith('.xhtml'):
+                            try:
+                                with epub_zip.open(file_name) as html_file:
+                                    html_content = html_file.read().decode('utf-8', errors='ignore')
+                                    # Basic HTML tag removal
+                                    import re
+                                    clean_text = re.sub(r'<[^>]+>', ' ', html_content)
+                                    text_content.append(clean_text)
+                            except Exception:
+                                continue
+                    
+                    if text_content:
+                        extracted_text = "\n".join(text_content)
+                        return self._clean_text(extracted_text)
+                    else:
+                        return f"EPUB document: {filename}\n\nNote: Install ebooklib for better EPUB support: pip install ebooklib"
+                        
+            except Exception:
+                return f"EPUB document: {filename}\n\nNote: Unable to extract text from this EPUB. Please install ebooklib for better EPUB support."
+        except Exception as e:
+            return f"EPUB document: {filename}\n\nError processing EPUB: {str(e)}"
     
     def _clean_text(self, text: str) -> str:
         """Clean and normalize extracted text"""
