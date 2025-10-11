@@ -116,7 +116,6 @@ async def send_message(
         additional_context = ""
         if is_kb_query:
             # Get all sources from database for comprehensive listing
-            from sqlalchemy import select
             from app.models.source import KnowledgeSource
             
             sources_result = await db.execute(

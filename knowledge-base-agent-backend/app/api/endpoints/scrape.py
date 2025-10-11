@@ -26,9 +26,14 @@ async def scrape_url(
         select(KnowledgeSource).where(KnowledgeSource.url == request.url)
     )
     existing_source = result.scalar_one_or_none()
-    
+
     if existing_source:
-        return {"message": "URL already exists in knowledge base", "source_id": str(existing_source.id)}
+        # If it previously failed, allow retry by deleting and recreating
+        if existing_source.status == "error":
+            await db.delete(existing_source)
+            await db.commit()
+        else:
+            return {"message": "URL already exists in knowledge base", "source_id": str(existing_source.id)}
     
     # Create new source entry
     source = KnowledgeSource(

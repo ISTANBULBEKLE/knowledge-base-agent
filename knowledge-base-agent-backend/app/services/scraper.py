@@ -5,23 +5,29 @@ from typing import Dict, Optional
 import asyncio
 from urllib.parse import urlparse
 import re
+import PyPDF2
+import io
 
 class WebScraper:
     def __init__(self):
         self.session = None
-    
+
     async def scrape_url(self, url: str) -> Dict:
         """Main scraping method that handles different content types"""
         try:
+            # Check if URL is a PDF
+            if url.lower().endswith('.pdf') or '/pdf/' in url.lower():
+                return await self._scrape_pdf(url)
+
             # Use Playwright for JavaScript-heavy sites
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
                 page = await browser.new_page()
-                
+
                 await page.goto(url, wait_until="networkidle")
                 content = await page.content()
                 title = await page.title()
-                
+
                 await browser.close()
             
             # Parse with BeautifulSoup
@@ -83,5 +89,55 @@ class WebScraper:
         # Extract domain
         parsed_url = urlparse(url)
         metadata["domain"] = parsed_url.netloc
-        
+
         return metadata
+
+    async def _scrape_pdf(self, url: str) -> Dict:
+        """Download and extract text from PDF URL"""
+        try:
+            # Download PDF
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        raise Exception(f"Failed to download PDF: HTTP {response.status}")
+
+                    pdf_content = await response.read()
+
+            # Extract text from PDF
+            pdf_file = io.BytesIO(pdf_content)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+
+            text_content = ""
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text_content += page.extract_text() + "\n\n"
+
+            # Extract title from PDF metadata or URL
+            title = ""
+            if pdf_reader.metadata and pdf_reader.metadata.get('/Title'):
+                title = pdf_reader.metadata.get('/Title')
+            else:
+                # Try to extract from URL
+                title = url.split('/')[-1].replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+
+            return {
+                "url": url,
+                "title": title or "PDF Document",
+                "content": text_content.strip(),
+                "metadata": {
+                    "url": url,
+                    "domain": urlparse(url).netloc,
+                    "type": "pdf",
+                    "pages": len(pdf_reader.pages)
+                },
+                "status": "completed"
+            }
+
+        except Exception as e:
+            return {
+                "url": url,
+                "title": "",
+                "content": "",
+                "metadata": {"error": str(e), "type": "pdf"},
+                "status": "error"
+            }

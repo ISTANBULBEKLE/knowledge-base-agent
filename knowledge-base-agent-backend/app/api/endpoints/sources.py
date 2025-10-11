@@ -31,14 +31,14 @@ async def get_sources(
 ):
     """Get knowledge sources"""
     query = select(KnowledgeSource).order_by(desc(KnowledgeSource.created_at))
-    
+
     if status:
         query = query.where(KnowledgeSource.status == status)
-    
+
     query = query.limit(limit)
     result = await db.execute(query)
     sources = result.scalars().all()
-    
+
     return [
         SourceResponse(
             id=source.id,
@@ -51,3 +51,37 @@ async def get_sources(
         )
         for source in sources
     ]
+
+@router.delete("/sources/{source_id}")
+async def delete_source(
+    source_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a knowledge source"""
+    try:
+        # Find the source
+        result = await db.execute(
+            select(KnowledgeSource).where(KnowledgeSource.id == str(source_id))
+        )
+        source = result.scalar_one_or_none()
+
+        if not source:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Source not found")
+
+        # Delete from database
+        await db.delete(source)
+        await db.commit()
+
+        # Note: Vector embeddings in ChromaDB are not automatically deleted
+        # You may want to implement ChromaDB cleanup based on source_id metadata
+
+        return {
+            "message": "Source deleted successfully",
+            "source_id": str(source_id)
+        }
+
+    except Exception as e:
+        await db.rollback()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Error deleting source: {str(e)}")
