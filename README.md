@@ -1,25 +1,29 @@
 # Knowledge Base Agent
 
-A sophisticated personal knowledge management system that intelligently scrapes, processes, and synthesizes information from web sources. The system provides a powerful chat-based interface with chat history management, querying a curated personal knowledge base using locally-run AI models.
+A sophisticated personal knowledge management system that intelligently scrapes, processes, and synthesizes information from web sources and documents. The system provides a powerful chat-based interface with accordion navigation, full resource management, and chat history, querying a curated personal knowledge base using locally-run AI models.
 
 ## 🏗️ Architecture
 
 **Two-Part Solution:**
-1. **Backend (Python/FastAPI)**: Web scraping, vector database, RAG implementation, and PostgreSQL for chat history
-2. **Frontend (Next.js 15)**: Modern chat interface with sidebar for previous conversations and real-time communication
+1. **Backend (Python/FastAPI)**: Web scraping (including PDF URLs), document processing, vector database, RAG implementation, and PostgreSQL for data persistence
+2. **Frontend (Next.js 15)**: Modern accordion-based UI with clean navigation, chat interface, and resource management
 
 ## 🚀 Features
 
-- ✅ **Modern UI**: Clean chat interface with sidebar for conversation history
-- ✅ **PostgreSQL Integration**: Chat history stored in local database
-- ✅ **Real-time Chat**: Instant messaging with AI responses
-- ✅ **Source Attribution**: AI responses include relevant source citations
-- ✅ **Mobile Responsive**: Works on desktop and mobile devices
-- ✅ **Local AI**: Complete privacy with local LLM processing (Ollama)
-- ✅ **Vector Search**: Semantic search across knowledge base
-- ✅ **Chat Management**: Create, view, and delete chat sessions
-- ✅ **Web Scraping**: Intelligent content extraction from web sources
-- ✅ **Document Upload**: Upload and process PDF, TXT, and EPUB files
+- ✅ **Accordion-Based UI**: Clean, collapsible navigation reducing visual clutter
+- ✅ **PostgreSQL Integration**: Robust data storage with JSONB support for metadata
+- ✅ **Real-time Chat**: Instant messaging with AI responses and source attribution
+- ✅ **Source Attribution**: AI responses include relevant source citations with URLs
+- ✅ **Resource Management**: Full CRUD operations - view, add, and delete knowledge sources
+- ✅ **Mobile Responsive**: Works on desktop and mobile devices with wider sidebar (28-36rem)
+- ✅ **Local AI**: Complete privacy with local LLM processing (Ollama llama3.1:8b)
+- ✅ **Vector Search**: Semantic search with ChromaDB and nomic-embed-text
+- ✅ **Chat Management**: Create, view, and delete chat sessions with CASCADE
+- ✅ **Web Scraping**: Intelligent content extraction with Playwright + BeautifulSoup
+- ✅ **PDF URL Scraping**: Direct scraping of PDF files from web URLs using PyPDF2
+- ✅ **Document Upload**: Upload and process PDF, TXT, and EPUB files (up to 100MB)
+- ✅ **Retry Logic**: Automatic retry for failed scrapes
+- ✅ **Hover Interactions**: Subtle delete buttons with smooth opacity transitions
 
 ## ⚡ Quick Start
 
@@ -38,7 +42,7 @@ make dev
 
 **Available commands:**
 - `make dev` - Start all services
-- `make stop` - Stop all services  
+- `make stop` - Stop all services
 - `make setup` - Initial setup and installation
 - `make clean` - Clean up generated files
 
@@ -225,13 +229,14 @@ ollama serve
 - `POST /api/v1/chat/sessions` - Create new chat session
 - `GET /api/v1/chat/sessions` - Get recent chat sessions (last 15)
 - `GET /api/v1/chat/sessions/{id}/messages` - Get messages for a session
-- `POST /api/v1/chat/sessions/{id}/messages` - Send message and get AI response
-- `DELETE /api/v1/chat/sessions/{id}` - Delete chat session
+- `POST /api/v1/chat/sessions/{id}/messages` - Send message and get AI response with RAG
+- `DELETE /api/v1/chat/sessions/{id}` - Delete chat session (CASCADE deletes messages)
 
 ### Knowledge Base Endpoints
-- `POST /api/v1/scrape` - Scrape web content and add to knowledge base
+- `POST /api/v1/scrape` - Scrape web content (including PDF URLs) and add to knowledge base
 - `POST /api/v1/upload` - Upload documents (PDF, TXT, EPUB) to knowledge base
-- `GET /api/v1/sources` - Get knowledge sources
+- `GET /api/v1/sources` - Get all knowledge sources with status
+- `DELETE /api/v1/sources/{id}` - Delete knowledge source (CASCADE)
 - `POST /api/v1/query` - Query knowledge base directly
 
 ## 🔧 Configuration
@@ -276,39 +281,54 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 
 ### 2. Adding Knowledge Sources
 
-#### Web Scraping
+#### Using the Accordion UI
+1. Open the "Add Web Source" accordion
+2. Enter a URL (supports both HTML pages and PDF URLs like `https://arxiv.org/pdf/2510.06255`)
+3. Click "Scrape URL"
+
+#### Web Scraping (API)
 ```bash
-# Using curl to add a web source
+# Scrape HTML page
 curl -X POST "http://localhost:8000/api/v1/scrape" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/article"}'
+
+# Scrape PDF URL directly
+curl -X POST "http://localhost:8000/api/v1/scrape" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://arxiv.org/pdf/2510.06255"}'
 ```
 
 #### Document Upload
 ```bash
 # Upload a document via curl
 curl -X POST "http://localhost:8000/api/v1/upload" \
-  -F "file=@/path/to/your/document.txt"
+  -F "file=@/path/to/your/document.pdf"
 
 # Supported formats: PDF, TXT, EPUB
-# Maximum file size: 10MB
+# Maximum file size: 100MB
 ```
 
 #### Using the Web Interface
 1. Navigate to http://localhost:3000
-2. Use the "Upload Documents" section to select and upload files
+2. Open the "Upload Documents" accordion
 3. Drag and drop files or click "Choose File" to browse
 4. Supported formats: PDF, TXT, EPUB files
 
-### 3. Chatting with Your Knowledge Base
-1. Type your question in the chat interface
-2. The AI will search your knowledge base for relevant information
-3. Responses include source citations when relevant content is found
-4. Chat history is automatically saved and accessible from the sidebar
+### 3. Managing Resources
+- **View**: Open "Your Resources" accordion to see all indexed content
+- **Delete**: Hover over any resource card and click the trash icon (becomes visible on hover)
+- **Retry Failed**: Resources with "error" status can be re-scraped by deleting and re-adding
 
-### 4. Managing Chat Sessions
-- **Create**: Click "New Chat" in the sidebar
-- **View**: Click on any previous chat in the sidebar
+### 4. Chatting with Your Knowledge Base
+1. Type your question in the chat interface
+2. The AI will search your knowledge base for relevant information (top-5 documents)
+3. Responses include source citations when relevant content is found
+4. Chat history is automatically saved and accessible from the "Recent Conversations" accordion
+
+### 5. Managing Chat Sessions
+- **Create**: Click "New Chat" button
+- **View**: Click on any previous chat in the "Recent Conversations" accordion
 - **Delete**: Hover over a chat and click the trash icon
 
 ## 🛠️ Development
@@ -319,28 +339,59 @@ knowledge-base-agent/
 ├── knowledge-base-agent-backend/     # Python FastAPI backend
 │   ├── app/
 │   │   ├── api/endpoints/           # API route handlers
+│   │   │   ├── chat.py             # Chat endpoints
+│   │   │   ├── scrape.py           # Scraping (HTML + PDF URLs)
+│   │   │   ├── upload.py           # Document upload
+│   │   │   ├── sources.py          # Resource management (+ DELETE)
+│   │   │   └── query.py            # Direct queries
 │   │   ├── core/                    # Configuration and database
 │   │   ├── models/                  # SQLAlchemy models
 │   │   ├── schemas/                 # Pydantic schemas
 │   │   └── services/                # Business logic services
+│   │       ├── scraper.py          # Web + PDF scraping
+│   │       ├── document_processor.py
+│   │       ├── vector_store.py     # ChromaDB integration
+│   │       └── llm.py              # Ollama integration
 │   └── requirements.txt
 ├── knowledge-base-agent-frontend/    # Next.js 15 frontend
 │   ├── src/
 │   │   ├── app/                     # Next.js app router
-│   │   ├── components/              # React components
+│   │   │   └── page.tsx            # Main layout with accordions
+│   │   ├── components/
+│   │   │   ├── ui/
+│   │   │   │   └── Accordion.tsx   # Collapsible component
+│   │   │   ├── chat/
+│   │   │   │   └── ChatInterface.tsx
+│   │   │   ├── sources/
+│   │   │   │   └── ResourcesList.tsx # With delete functionality
+│   │   │   ├── scraping/
+│   │   │   │   └── ScrapeForm.tsx
+│   │   │   └── documents/
+│   │   │       └── DocumentUpload.tsx
 │   │   ├── lib/                     # Utilities and API client
 │   │   ├── stores/                  # Zustand state management
+│   │   ├── styles/                  # Sass/SCSS files
+│   │   │   ├── accordion.scss      # Accordion & resource styles
+│   │   │   ├── sidebar.scss
+│   │   │   └── layout.scss
 │   │   └── types/                   # TypeScript definitions
 │   └── package.json
+├── docs/                            # Documentation
+│   ├── analysis_summary.md
+│   ├── architecture_analysis.md
+│   ├── business_logic_flow.md
+│   ├── technical_integration.md
+│   └── PRESENTATION_SLIDES.md
 ├── install.sh                       # Automated installation
 ├── start-dev.sh                     # Development startup script
-└── README.md
+├── README.md
+└── STATUS.md
 ```
 
 ### Key Technologies
-- **Backend**: FastAPI, SQLAlchemy, PostgreSQL, ChromaDB, Playwright, BeautifulSoup
-- **Frontend**: Next.js 15, TypeScript, Tailwind CSS, Zustand, Radix UI
-- **AI/ML**: Ollama (llama3.1:8b), Sentence Transformers, ChromaDB
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL, ChromaDB, Playwright, BeautifulSoup, PyPDF2
+- **Frontend**: Next.js 15, React 19, TypeScript, Sass/SCSS, Zustand
+- **AI/ML**: Ollama (llama3.1:8b, nomic-embed-text), ChromaDB
 - **Database**: PostgreSQL 15 with JSONB support
 
 ## 🔍 Troubleshooting
@@ -372,10 +423,18 @@ knowledge-base-agent/
    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
    ```
 
+5. **ChromaDB Schema Errors**
+   ```bash
+   # Delete and recreate vector database
+   rm -rf knowledge-base-agent-backend/data/chroma_db
+   mkdir -p knowledge-base-agent-backend/data/chroma_db
+   ```
+
 ### Logs and Debugging
 - Backend logs: Check terminal running uvicorn
 - Frontend logs: Check browser console and terminal running npm
 - Database logs: Check PostgreSQL logs via `brew services`
+- API Testing: Use http://localhost:8000/docs (Swagger UI)
 
 ## 🤝 Contributing
 
@@ -391,6 +450,19 @@ This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
-- Built with FastAPI, Next.js, and Ollama
+- Built with FastAPI, Next.js 15, and Ollama
 - Uses ChromaDB for vector storage
-- Powered by local AI models for privacy
+- Powered by local AI models for complete privacy
+- PDF processing with PyPDF2
+- Web scraping with Playwright and BeautifulSoup
+
+## 📝 Recent Updates
+
+- ✅ Added accordion-based navigation for clean UI
+- ✅ Implemented resource deletion with CASCADE
+- ✅ Added PDF URL scraping support
+- ✅ Widened sidebar for better content display (28-36rem)
+- ✅ Added hover-based delete buttons with smooth transitions
+- ✅ Improved text overflow handling with ellipsis
+- ✅ Added retry logic for failed scrapes
+- ✅ Enhanced resource cards with distinct visual separation
