@@ -4,6 +4,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.sql import func
 from typing import List
 import uuid
+from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.models.chat import ChatSession, ChatMessage
@@ -111,6 +112,20 @@ async def send_message(
         # Search for relevant context
         vector_store = VectorStore()
         relevant_docs = await vector_store.search(user_content, n_results=5)
+
+        print(f"\n[CHAT] ==================== SEARCH DEBUG ====================")
+        print(f"[CHAT] Query: {user_content}")
+        print(f"[CHAT] Found {len(relevant_docs)} relevant documents")
+        for idx, doc in enumerate(relevant_docs):
+            title = doc['metadata'].get('title', 'Untitled')
+            url = doc['metadata'].get('url', 'Unknown')
+            distance = doc.get('distance', 'N/A')
+            content_preview = doc.get('content', '')[:100] + '...' if len(doc.get('content', '')) > 100 else doc.get('content', '')
+            print(f"[CHAT] Doc {idx+1}: {title}")
+            print(f"        URL: {url}")
+            print(f"        Distance: {distance}")
+            print(f"        Preview: {content_preview}")
+        print(f"[CHAT] ======================================================\n")
         
         # If asking about knowledge base, also get all sources from database
         additional_context = ""
@@ -152,12 +167,16 @@ async def send_message(
         
         ai_response = await llm.generate_response(user_content, context_for_llm)
         
-        # Save AI message with sources
+        # Save AI message with sources (include chunk_index and page_number for deep linking)
         sources = [
             {
                 "url": doc["metadata"].get("url", ""),
                 "title": doc["metadata"].get("title", ""),
-                "relevance": 1 - (doc.get("distance", 0) or 0)
+                "relevance": 1 - (doc.get("distance", 0) or 0),
+                "chunk_index": doc["metadata"].get("chunk_index", 0),
+                "total_chunks": doc["metadata"].get("total_chunks", 1),
+                "page_number": doc["metadata"].get("page_number"),  # Actual page number from PDF
+                "content_preview": doc.get("content", "")[:200]  # First 200 chars for preview
             }
             for doc in relevant_docs[:3]  # Top 3 sources
         ]
@@ -177,8 +196,8 @@ async def send_message(
         )
         session = session_result.scalar_one_or_none()
         if session:
-            session.updated_at = func.now()
-        
+            session.updated_at = datetime.now(timezone.utc)
+
         await db.commit()
         
         return {

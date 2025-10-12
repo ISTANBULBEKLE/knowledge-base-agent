@@ -1,5 +1,6 @@
 import aiohttp
 import json
+import re
 from typing import List, Dict, Any
 from app.core.config import settings
 
@@ -7,7 +8,17 @@ class OllamaLLM:
     def __init__(self):
         self.base_url = settings.OLLAMA_BASE_URL
         self.chat_model = settings.OLLAMA_CHAT_MODEL
-    
+
+    def _strip_xml_tags(self, text: str) -> str:
+        """Remove XML tags like <plan>, <reflection>, etc. from LLM output"""
+        # Remove XML tags and their content (for tags like <thinking>, <reflection>)
+        text = re.sub(r'<(thinking|reflection|plan|scratchpad)>.*?</\1>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Remove any remaining XML-like tags
+        text = re.sub(r'<[^>]+>', '', text)
+        # Clean up extra whitespace
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
+        return text.strip()
+
     async def generate_response(self, query: str, context: List[Dict[str, Any]]) -> str:
         """Generate response using Ollama with RAG context"""
         
@@ -47,7 +58,10 @@ Answer:"""
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result.get("response", "I couldn't generate a response.")
+                    raw_response = result.get("response", "I couldn't generate a response.")
+                    # Strip XML tags from the response
+                    cleaned_response = self._strip_xml_tags(raw_response)
+                    return cleaned_response
                 else:
                     return "Error connecting to the language model."
     

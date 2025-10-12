@@ -107,10 +107,22 @@ class WebScraper:
             pdf_file = io.BytesIO(pdf_content)
             pdf_reader = PyPDF2.PdfReader(pdf_file)
 
+            # Extract text with page markers
             text_content = ""
+            page_markers = []  # Track where each page starts
+
             for page_num in range(len(pdf_reader.pages)):
                 page = pdf_reader.pages[page_num]
-                text_content += page.extract_text() + "\n\n"
+                page_text = page.extract_text()
+
+                # Record the character position where this page starts
+                page_markers.append({
+                    "page": page_num + 1,
+                    "start_pos": len(text_content)
+                })
+
+                # Add page marker in the text itself
+                text_content += f"[PAGE {page_num + 1}]\n{page_text}\n\n"
 
             # Extract title from PDF metadata or URL
             title = ""
@@ -128,7 +140,8 @@ class WebScraper:
                     "url": url,
                     "domain": urlparse(url).netloc,
                     "type": "pdf",
-                    "pages": len(pdf_reader.pages)
+                    "pages": len(pdf_reader.pages),
+                    "page_markers": page_markers
                 },
                 "status": "completed"
             }

@@ -58,8 +58,10 @@ async def scrape_url(
         
         # Add to vector store if successful
         if scraped_data.get("status") == "completed" and scraped_data.get("content"):
+            print(f"[SCRAPE] Adding to vector store: {scraped_data.get('title', 'Untitled')}")
+            print(f"[SCRAPE] Content length: {len(scraped_data.get('content', ''))} characters")
             vector_store = VectorStore()
-            await vector_store.add_document(
+            doc_id = await vector_store.add_document(
                 scraped_data["content"],
                 {
                     "url": request.url,
@@ -67,6 +69,7 @@ async def scrape_url(
                     "source_id": str(source.id)
                 }
             )
+            print(f"[SCRAPE] Added to vector store with doc_id: {doc_id}")
         
         await db.commit()
         
