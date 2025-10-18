@@ -67,6 +67,38 @@ class VectorStore:
 
         # Return only the requested number
         return formatted_results[:n_results]
+
+    async def delete_by_source_id(self, source_id: str) -> int:
+        """Delete all vectors associated with a source_id
+
+        Args:
+            source_id: The UUID of the source to delete vectors for
+
+        Returns:
+            Number of vectors deleted
+        """
+        try:
+            # Query all documents with this source_id in metadata
+            results = self.collection.get(
+                where={"source_id": source_id}
+            )
+
+            if results and results['ids']:
+                vector_count = len(results['ids'])
+                print(f"[VECTOR_DELETE] Found {vector_count} vectors for source {source_id}")
+
+                # Delete all matching documents
+                self.collection.delete(ids=results['ids'])
+                print(f"[VECTOR_DELETE] Successfully deleted {vector_count} vectors")
+
+                return vector_count
+
+            print(f"[VECTOR_DELETE] No vectors found for source {source_id}")
+            return 0
+
+        except Exception as e:
+            print(f"[VECTOR_DELETE] Error deleting vectors for source {source_id}: {e}")
+            raise
     
     def _extract_page_number(self, chunk: str) -> Optional[int]:
         """Extract page number from chunk text that contains [PAGE X] marker"""

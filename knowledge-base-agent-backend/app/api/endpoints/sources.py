@@ -8,6 +8,7 @@ import uuid
 
 from app.core.database import get_db
 from app.models.source import KnowledgeSource
+from app.services.vector_store import VectorStore
 
 router = APIRouter()
 
@@ -57,9 +58,9 @@ async def delete_source(
     source_id: uuid.UUID,
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a knowledge source"""
+    """Delete a knowledge source and its vector embeddings"""
     try:
-        # Find the source
+        # Find the source first
         result = await db.execute(
             select(KnowledgeSource).where(KnowledgeSource.id == str(source_id))
         )
@@ -69,19 +70,28 @@ async def delete_source(
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Source not found")
 
-        # Delete from database
+        print(f"[DELETE] Deleting source {source_id}: {source.title}")
+
+        # Delete vectors from ChromaDB FIRST (before DB deletion)
+        # This ensures we can still access source info if needed
+        vector_store = VectorStore()
+        vectors_deleted = await vector_store.delete_by_source_id(str(source_id))
+
+        # Then delete from database (CASCADE handles related records)
         await db.delete(source)
         await db.commit()
 
-        # Note: Vector embeddings in ChromaDB are not automatically deleted
-        # You may want to implement ChromaDB cleanup based on source_id metadata
+        print(f"[DELETE] Successfully deleted source {source_id} from PostgreSQL")
+        print(f"[DELETE] Total vectors deleted: {vectors_deleted}")
 
         return {
-            "message": "Source deleted successfully",
-            "source_id": str(source_id)
+            "message": "Source and associated vectors deleted successfully",
+            "source_id": str(source_id),
+            "vectors_deleted": vectors_deleted
         }
 
     except Exception as e:
         await db.rollback()
+        print(f"[DELETE] Error deleting source {source_id}: {e}")
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=f"Error deleting source: {str(e)}")
