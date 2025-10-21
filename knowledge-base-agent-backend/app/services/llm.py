@@ -24,7 +24,7 @@ class OllamaLLM:
 
         # Prepare context from retrieved documents
         context_text = "\n\n".join([
-            f"Source: {doc['metadata'].get('url', 'Unknown')}\n{doc['content']}"
+            f"Source: {doc.get('metadata', {}).get('url', 'Unknown')}\n{doc.get('content', '')}"
             for doc in context
         ])
 
@@ -33,18 +33,26 @@ class OllamaLLM:
             # Extract unique sources from context
             sources = {}
             for doc in context:
-                title = doc['metadata'].get('title', 'Untitled')
-                url = doc['metadata'].get('url', 'Unknown')
-                source_type = doc['metadata'].get('source_type', 'unknown')
+                # Safely get metadata (might be missing or structured differently)
+                metadata = doc.get('metadata', {})
+                if not isinstance(metadata, dict):
+                    metadata = {}
+
+                title = metadata.get('title', 'Untitled')
+                url = metadata.get('url', 'Unknown')
+                source_type = metadata.get('source_type', 'document')
+
                 if url not in sources:
                     sources[url] = {'title': title, 'type': source_type}
 
-            sources_list = "\n".join([
-                f"- {info['title']} ({info['type']})"
-                for url, info in sources.items()
-            ])
+            # Only use specialized prompt if we have sources
+            if sources:
+                sources_list = "\n".join([
+                    f"- {info['title']} ({info['type']})"
+                    for url, info in sources.items()
+                ])
 
-            prompt = f"""You are a helpful AI assistant analyzing a personal knowledge base.
+                prompt = f"""You are a helpful AI assistant analyzing a personal knowledge base.
 
 The user has asked you to summarize their knowledge base. You MUST provide a comprehensive overview that covers ALL sources listed below.
 
@@ -65,6 +73,15 @@ Context from sources:
 Question: {query}
 
 Provide a comprehensive summary that covers ALL {len(sources)} sources:"""
+            else:
+                # Fallback if no sources found
+                prompt = f"""You are a helpful AI assistant with access to a personal knowledge base.
+
+The user asked: {query}
+
+However, the knowledge base appears to be empty or no relevant sources were found. Please inform the user that their knowledge base is empty and they need to add sources first.
+
+Answer:"""
         else:
             # Create standard prompt with context
             prompt = f"""You are a helpful AI assistant with access to a personal knowledge base.
