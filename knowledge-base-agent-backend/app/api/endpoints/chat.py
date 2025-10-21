@@ -106,7 +106,9 @@ async def send_message(
         knowledge_base_queries = [
             "list", "show", "knowledge base", "what resources",
             "sources", "documents", "what do you know", "summarize",
-            "main topics", "overview", "what's in"
+            "main topics", "overview", "what's in", "my articles",
+            "my documents", "key insights", "recent articles", "recent documents",
+            "what have i", "compare", "across", "from my"
         ]
         is_kb_query = any(keyword in user_content.lower() for keyword in knowledge_base_queries)
         
@@ -132,20 +134,21 @@ async def send_message(
         
         # If asking about knowledge base, also get all sources from database
         additional_context = ""
+        all_kb_sources = []  # Store for later use in sources list
         if is_kb_query:
             # Get all sources from database for comprehensive listing
             from app.models.source import KnowledgeSource
-            
+
             sources_result = await db.execute(
                 select(KnowledgeSource)
                 .where(KnowledgeSource.status == "completed")
                 .order_by(KnowledgeSource.created_at.desc())
             )
-            all_sources = sources_result.scalars().all()
-            
-            if all_sources:
+            all_kb_sources = sources_result.scalars().all()
+
+            if all_kb_sources:
                 source_list = []
-                for source in all_sources:
+                for source in all_kb_sources:
                     source_type = "Website" if source.url.startswith("http") else "Document"
                     # Include a preview of content
                     content_preview = ""
@@ -159,9 +162,13 @@ async def send_message(
                         f"{content_preview}"
                     )
 
+                # Determine if user is asking about "recent" items
+                is_recent_query = "recent" in user_content.lower()
+
                 additional_context = (
                     f"\n\nCOMPLETE KNOWLEDGE BASE INVENTORY:\n"
-                    f"You have {len(all_sources)} sources in your knowledge base:\n\n" +
+                    f"You have {len(all_kb_sources)} sources in your knowledge base"
+                    f"{' (shown in reverse chronological order)' if is_recent_query else ''}:\n\n" +
                     "\n\n".join(source_list)
                 )
         
@@ -185,18 +192,45 @@ async def send_message(
         ai_response = await llm.generate_response(user_content, context_for_llm)
         
         # Save AI message with sources (include chunk_index and page_number for deep linking)
-        sources = [
-            {
-                "url": doc["metadata"].get("url", ""),
-                "title": doc["metadata"].get("title", ""),
-                "relevance": 1 - (doc.get("distance", 0) or 0),
-                "chunk_index": doc["metadata"].get("chunk_index", 0),
-                "total_chunks": doc["metadata"].get("total_chunks", 1),
-                "page_number": doc["metadata"].get("page_number"),  # Actual page number from PDF
-                "content_preview": doc.get("content", "")[:200]  # First 200 chars for preview
-            }
-            for doc in relevant_docs[:3]  # Top 3 sources
-        ]
+        # Diversify sources - get at least one result from each unique source
+        seen_sources = set()
+        sources = []
+
+        # First, add sources from vector search results (with relevance scores)
+        for doc in relevant_docs:
+            source_id = doc["metadata"].get("source_id")
+            if source_id and source_id not in seen_sources:
+                sources.append({
+                    "url": doc["metadata"].get("url", ""),
+                    "title": doc["metadata"].get("title", ""),
+                    "relevance": 1 - (doc.get("distance", 0) or 0),
+                    "chunk_index": doc["metadata"].get("chunk_index", 0),
+                    "total_chunks": doc["metadata"].get("total_chunks", 1),
+                    "page_number": doc["metadata"].get("page_number"),  # Actual page number from PDF
+                    "content_preview": doc.get("content", "")[:200]  # First 200 chars for preview
+                })
+                seen_sources.add(source_id)
+
+                # Stop after 5 unique sources
+                if len(sources) >= 5:
+                    break
+
+        # For knowledge base queries, ensure ALL sources are listed (even if not in vector results)
+        if is_kb_query and all_kb_sources:
+            for kb_source in all_kb_sources:
+                source_id = str(kb_source.id)
+                if source_id not in seen_sources:
+                    # Add source even if it wasn't in vector search results
+                    sources.append({
+                        "url": kb_source.url,
+                        "title": kb_source.title or "Untitled",
+                        "relevance": 0.5,  # Medium relevance (not from vector search)
+                        "chunk_index": 0,
+                        "total_chunks": 1,
+                        "page_number": None,
+                        "content_preview": kb_source.content[:200] if kb_source.content else "No preview available"
+                    })
+                    seen_sources.add(source_id)
         
         ai_message = ChatMessage(
             session_id=str(session_id),
