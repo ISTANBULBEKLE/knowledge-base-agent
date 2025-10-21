@@ -189,7 +189,7 @@ async def send_message(
                 "distance": 0.0  # Highest relevance
             })
         
-        ai_response = await llm.generate_response(user_content, context_for_llm)
+        ai_response = await llm.generate_response(user_content, context_for_llm, is_kb_summary=is_kb_query)
         
         # Save AI message with sources (include chunk_index and page_number for deep linking)
         # Diversify sources - get at least one result from each unique source

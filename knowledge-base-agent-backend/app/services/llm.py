@@ -19,18 +19,56 @@ class OllamaLLM:
         text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
         return text.strip()
 
-    async def generate_response(self, query: str, context: List[Dict[str, Any]]) -> str:
+    async def generate_response(self, query: str, context: List[Dict[str, Any]], is_kb_summary: bool = False) -> str:
         """Generate response using Ollama with RAG context"""
-        
+
         # Prepare context from retrieved documents
         context_text = "\n\n".join([
             f"Source: {doc['metadata'].get('url', 'Unknown')}\n{doc['content']}"
             for doc in context
         ])
-        
-        # Create prompt with context
-        prompt = f"""You are a helpful AI assistant with access to a personal knowledge base. 
-Use the following context to answer the user's question. If the context doesn't contain 
+
+        # Create specialized prompt for knowledge base summaries
+        if is_kb_summary:
+            # Extract unique sources from context
+            sources = {}
+            for doc in context:
+                title = doc['metadata'].get('title', 'Untitled')
+                url = doc['metadata'].get('url', 'Unknown')
+                source_type = doc['metadata'].get('source_type', 'unknown')
+                if url not in sources:
+                    sources[url] = {'title': title, 'type': source_type}
+
+            sources_list = "\n".join([
+                f"- {info['title']} ({info['type']})"
+                for url, info in sources.items()
+            ])
+
+            prompt = f"""You are a helpful AI assistant analyzing a personal knowledge base.
+
+The user has asked you to summarize their knowledge base. You MUST provide a comprehensive overview that covers ALL sources listed below.
+
+AVAILABLE SOURCES ({len(sources)} total):
+{sources_list}
+
+IMPORTANT INSTRUCTIONS:
+1. You MUST mention and discuss EVERY source listed above
+2. For each source, identify the main topics, themes, or key information
+3. Group related sources together if they share common themes
+4. If a source seems unrelated to others, mention it separately
+5. Provide a structured summary that ensures no source is left out
+6. Use the context below to understand the content of each source
+
+Context from sources:
+{context_text}
+
+Question: {query}
+
+Provide a comprehensive summary that covers ALL {len(sources)} sources:"""
+        else:
+            # Create standard prompt with context
+            prompt = f"""You are a helpful AI assistant with access to a personal knowledge base.
+Use the following context to answer the user's question. If the context doesn't contain
 relevant information, say so and provide a general response.
 
 Context:
