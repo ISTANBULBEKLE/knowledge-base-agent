@@ -104,14 +104,17 @@ async def send_message(
         
         # Check if user is asking about knowledge base contents
         knowledge_base_queries = [
-            "list", "show", "what's in my knowledge base", "what resources", 
-            "knowledge base contents", "sources", "documents", "what do you know"
+            "list", "show", "knowledge base", "what resources",
+            "sources", "documents", "what do you know", "summarize",
+            "main topics", "overview", "what's in"
         ]
         is_kb_query = any(keyword in user_content.lower() for keyword in knowledge_base_queries)
         
         # Search for relevant context
+        # If it's a knowledge base query, get more results to ensure coverage of all sources
         vector_store = VectorStore()
-        relevant_docs = await vector_store.search(user_content, n_results=5)
+        n_results = 15 if is_kb_query else 5
+        relevant_docs = await vector_store.search(user_content, n_results=n_results)
 
         print(f"\n[CHAT] ==================== SEARCH DEBUG ====================")
         print(f"[CHAT] Query: {user_content}")
@@ -144,9 +147,23 @@ async def send_message(
                 source_list = []
                 for source in all_sources:
                     source_type = "Website" if source.url.startswith("http") else "Document"
-                    source_list.append(f"- {source.title or 'Untitled'} ({source_type}): {source.url}")
-                
-                additional_context = f"\n\nCOMPLETE KNOWLEDGE BASE INVENTORY:\n" + "\n".join(source_list)
+                    # Include a preview of content
+                    content_preview = ""
+                    if source.content:
+                        preview = source.content[:300].strip()
+                        content_preview = f"\n  Preview: {preview}..."
+
+                    source_list.append(
+                        f"- {source.title or 'Untitled'} ({source_type})"
+                        f"\n  URL: {source.url}"
+                        f"{content_preview}"
+                    )
+
+                additional_context = (
+                    f"\n\nCOMPLETE KNOWLEDGE BASE INVENTORY:\n"
+                    f"You have {len(all_sources)} sources in your knowledge base:\n\n" +
+                    "\n\n".join(source_list)
+                )
         
         # Generate AI response
         llm = OllamaLLM()
