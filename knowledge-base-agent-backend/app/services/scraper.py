@@ -21,14 +21,47 @@ class WebScraper:
 
             # Use Playwright for JavaScript-heavy sites
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
+                # Launch browser with better stealth options
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-dev-shm-usage',
+                        '--no-sandbox'
+                    ]
+                )
 
-                await page.goto(url, wait_until="networkidle")
-                content = await page.content()
-                title = await page.title()
+                # Create context with realistic browser headers
+                context = await browser.new_context(
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    viewport={'width': 1920, 'height': 1080},
+                    extra_http_headers={
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                    }
+                )
 
-                await browser.close()
+                page = await context.new_page()
+
+                # Hide webdriver property
+                await page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                """)
+
+                try:
+                    # Go to page with timeout and wait for DOM to load
+                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+
+                    # Wait a bit for dynamic content (but don't wait for all network idle)
+                    await page.wait_for_timeout(3000)
+
+                    content = await page.content()
+                    title = await page.title()
+                finally:
+                    await context.close()
+                    await browser.close()
             
             # Parse with BeautifulSoup
             soup = BeautifulSoup(content, 'html.parser')
